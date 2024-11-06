@@ -1,22 +1,29 @@
 mod instructions;
 mod registers;
 
+use crate::memory::Memory;
 use instructions::{Instruction, R16, R8, U3};
 use registers::Registers;
 
-struct Cpu {
+pub(crate) struct Cpu {
     registers: Registers,
 }
 
 impl Cpu {
-    fn execute(&mut self, i: Instruction, memory: &[u8]) -> u8 {
+    pub(crate) fn new() -> Self {
+        Self {
+            registers: Registers::new(),
+        }
+    }
+
+    fn execute(&mut self, i: Instruction, memory: &mut Memory) -> u8 {
         match i {
             Instruction::ADC_A_r8 { r8 } => {
                 self.add_a(self.registers.get_r8(r8), true);
                 4
             }
             Instruction::ADC_A_HL => {
-                let rhs = memory[self.registers.get_hl() as usize];
+                let rhs = memory.read(self.registers.get_hl());
                 self.add_a(rhs, true);
                 8
             }
@@ -29,7 +36,7 @@ impl Cpu {
                 4
             }
             Instruction::ADD_A_HL => {
-                let rhs = memory[self.registers.get_hl() as usize];
+                let rhs = memory.read(self.registers.get_hl());
                 self.add_a(rhs, false);
                 8
             }
@@ -54,7 +61,7 @@ impl Cpu {
                 4
             }
             Instruction::AND_A_HL => {
-                let rhs = memory[self.registers.get_hl() as usize];
+                let rhs = memory.read(self.registers.get_hl());
                 self.and(rhs);
                 8
             }
@@ -67,7 +74,7 @@ impl Cpu {
                 8
             }
             Instruction::BIT_U3_HL { u3 } => {
-                let byte = memory[self.registers.get_hl() as usize];
+                let byte = memory.read(self.registers.get_hl());
                 self.bit(u3, byte);
                 12
             }

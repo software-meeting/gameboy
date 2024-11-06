@@ -41,6 +41,26 @@ pub(crate) struct Registers {
 }
 
 impl Registers {
+    pub(crate) fn new() -> Self {
+        Self {
+            a: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+            f: Flags {
+                zero: false,
+                subtract: false,
+                half_carry: false,
+                carry: false,
+            },
+            h: 0,
+            l: 0,
+            sp: 0,
+            pc: 0,
+        }
+    }
+
     fn get_af(&self) -> u16 {
         ((self.a as u16) << 8) & u8::from(&self.f) as u16
     }
