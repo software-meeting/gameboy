@@ -37,7 +37,7 @@ pub(crate) struct Registers {
     h: u8,
     l: u8,
     pub(crate) sp: u16,
-    pc: u16,
+    pub(crate) pc: u16,
 }
 
 impl Registers {
@@ -97,7 +97,7 @@ impl Registers {
         self.l = (value & 0xFF) as u8;
     }
 
-    pub(crate) fn get_r8(&self, register: R8) -> u8 {
+    pub(crate) fn get_r8(&self, register: &R8) -> u8 {
         match register {
             R8::A => self.a,
             R8::B => self.b,
@@ -109,7 +109,25 @@ impl Registers {
         }
     }
 
-    pub(crate) fn get_r16(&self, register: R16) -> u16 {
+    pub(crate) fn set_r8(&mut self, register: &R8, value: u8) {
+        match register {
+            R8::A => self.a = value,
+            R8::B => self.b = value,
+            R8::C => self.c = value,
+            R8::D => self.d = value,
+            R8::E => self.e = value,
+            R8::H => self.h = value,
+            R8::L => self.l = value,
+        }
+    }
+    pub(crate) fn set_r16(&mut self, register: &R16, value: u16) {
+        match register {
+            R16::BC => self.set_bc(value),
+            R16::DE => self.set_de(value),
+            R16::HL => self.set_hl(value),
+        }
+    }
+    pub(crate) fn get_r16(&self, register: &R16) -> u16 {
         match register {
             R16::BC => self.get_bc(),
             R16::DE => self.get_de(),

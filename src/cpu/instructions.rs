@@ -15,11 +15,10 @@ pub(crate) enum R16 {
 }
 
 pub(crate) enum Condition {
-    NZ,
     Z,
+    NZ,
     NC,
     C,
-    None,
 }
 
 pub(crate) enum Vec {
@@ -59,26 +58,42 @@ pub(crate) enum U3 {
     Seven,
 }
 
+impl U3 {
+    pub(crate) fn get(&self) -> u8 {
+        match self {
+            U3::Zero => 0,
+            U3::One => 1,
+            U3::Two => 2,
+            U3::Three => 3,
+            U3::Four => 4,
+            U3::Five => 5,
+            U3::Six => 6,
+            U3::Seven => 7,
+        }
+    }
+}
+
 #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
 pub(crate) enum Instruction {
-    ADC_A_r8 { r8: R8 },
+    ADC_A_R8 { r8: R8 },
     ADC_A_HL,
-    ADC_A_n8 { n8: u8 },
-    ADD_A_r8 { r8: R8 },
+    ADC_A_N8 { n8: u8 },
+    ADD_A_R8 { r8: R8 },
     ADD_A_HL,
-    ADD_A_n8 { n8: u8 },
-    ADD_HL_r16 { r16: R16 },
+    ADD_A_N8 { n8: u8 },
+    ADD_HL_R16 { r16: R16 },
     ADD_HL_SP,
-    ADD_SP_e8 { e8: i8 },
-    AND_A_r8 { r8: R8 },
+    ADD_SP_E8 { e8: i8 },
+    AND_A_R8 { r8: R8 },
     AND_A_HL,
-    AND_A_n8 { n8: u8 },
+    AND_A_N8 { n8: u8 },
     BIT_U3_R8 { u3: U3, r8: R8 },
     BIT_U3_HL { u3: U3 },
     CALL_N16 { n16: u16 },
     CALL_CC_N16 { condition: Condition, n16: u16 },
     CCF,
     CP_A_R8 { r8: R8 },
+    CP_A_N8 { n8: u8 },
     CP_A_HL,
     CPL,
     DAA,
@@ -96,28 +111,28 @@ pub(crate) enum Instruction {
     JP_N16 { n16: u16 },
     JP_CC_N16 { condition: Condition, n16: u16 },
     JP_HL,
-    JR_N16 { n16: u16 },
-    JR_CC_N16 { condition: Condition, n16: u16 },
+    JR_N16 { offset: i8 },
+    JR_CC_N16 { condition: Condition, offset: i8 },
     LD_R8_R8 { dest: R8, src: R8 },
     LD_R8_N8 { dest: R8, n8: u8 },
     LD_R16_R16 { dest: R16, src: R16 },
     LD_HL_R8 { r8: R8 },
+    LD_HL_N8 { n8: u8 },
     LD_R8_HL { r8: R8 },
-    LD_R16_A { r16: u16 },
+    LD_R16_A { r16: R16 },
     LD_N16_A { n16: u16 },
     LDH_N16_A { n16: u16 },
     LDH_C_A,
-    LD_A_R16 { r16: u16 },
+    LD_A_R16 { r16: R16 },
     LD_A_N16 { n16: u16 },
-    LDH_A_R16 { r16: u16 },
     LDH_A_N16 { n16: u16 },
     LD_A_C,
     LD_HLI_A,
     LD_HLD_A,
     LD_A_HLI,
+    LD_A_HLD,
     LD_SP_N16 { n16: u16 },
     LD_N16_SP { n16: u16 },
-    LD_HL_SPE,
     LD_HL_SPE8,
     LD_SP_HL,
     NOP,
@@ -130,6 +145,7 @@ pub(crate) enum Instruction {
     PUSH_R16 { r16: R16 },
     RES_U3_R8 { u3: U3, r8: R8 },
     RES_U3_HL { u3: U3 },
+    RET,
     RET_CC { condition: Condition },
     RETI,
     RL_R8 { r8: R8 },
