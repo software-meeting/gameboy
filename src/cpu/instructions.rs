@@ -14,6 +14,23 @@ pub(crate) enum R16 {
     HL,
 }
 
+impl R16 {
+    pub(crate) fn get_upper(&self) -> R8 {
+        match self {
+            R16::BC => R8::B,
+            R16::DE => R8::D,
+            R16::HL => R8::H,
+        }
+    }
+    pub(crate) fn get_lower(&self) -> R8 {
+        match self {
+            R16::BC => R8::C,
+            R16::DE => R8::E,
+            R16::HL => R8::L,
+        }
+    }
+}
+
 pub(crate) enum Condition {
     Z,
     NZ,
@@ -133,7 +150,7 @@ pub(crate) enum Instruction {
     LD_A_HLD,
     LD_SP_N16 { n16: u16 },
     LD_N16_SP { n16: u16 },
-    LD_HL_SPE8,
+    LD_HL_SPE8 { e8: i8 },
     LD_SP_HL,
     NOP,
     OR_A_R8 { r8: R8 },

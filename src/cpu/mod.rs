@@ -290,7 +290,7 @@ impl Cpu {
                 12
             }
             Instruction::LDH_C_A => {
-                let value_address = (0xFF00 + self.registers.c as u16).clamp(0xFF00, 0xFFFF);
+                let value_address = 0xFF00 + self.registers.c as u16;
                 let value = memory.read(value_address);
                 self.registers.a = value;
                 8
@@ -313,7 +313,7 @@ impl Cpu {
                 12
             }
             Instruction::LD_A_C => {
-                let value_address = (0xFF00 + self.registers.c as u16).clamp(0xFF00, 0xFFFF);
+                let value_address = 0xFF00 + self.registers.c as u16;
                 let value = memory.read(value_address);
                 self.registers.a = value;
                 8
@@ -355,17 +355,14 @@ impl Cpu {
                 memory.write(n16.wrapping_add(1), (self.registers.sp >> 8) as u8);
                 20
             }
-            Instruction::LD_HL_SPE8 {} => {
-                let before = self.registers.sp;
-                // Consider signed 0xE8 = -24
-                let after = self.registers.get_hl().wrapping_sub(24);
-                self.registers.sp = after;
+            Instruction::LD_HL_SPE8 { e8 } => {
+                let sp = self.registers.sp;
+                let value = sp + e8 as i16 as u16;
+                self.registers.set_hl(value);
                 self.registers.f.zero = false;
                 self.registers.f.subtract = false;
-                // check if 3rd bit overflow
-                self.registers.f.half_carry = before & 0x8 != after & 0x8;
-                // check if 7th bit overflow
-                self.registers.f.carry = before & 0x40 != after & 0x40;
+                self.registers.f.half_carry = (self.registers.sp & 0xF) + (value & 0xF) > 0xF;
+                self.registers.f.carry = (self.registers.sp & 0xFF) + (&0xFF) > 0xFF;
                 12
             }
             Instruction::LD_SP_HL => {
@@ -382,8 +379,23 @@ impl Cpu {
                 self.or_a(n8);
                 2
             }
-            Instruction::POP_AF => todo!(),
-            Instruction::POP_R16 { r16 } => todo!(),
+            Instruction::POP_AF => {
+                self.registers.f = registers::Flags::from(memory.read(self.registers.sp));
+                self.registers.sp += 1;
+                self.registers.a = memory.read(self.registers.sp);
+                12
+            }
+            Instruction::POP_R16 { r16 } => {
+                let lower = r16.get_lower();
+                let upper = r16.get_upper();
+                self.registers
+                    .set_r8(&lower, memory.read(self.registers.sp));
+                self.registers.sp += 1;
+                self.registers
+                    .set_r8(&upper, memory.read(self.registers.sp));
+                self.registers.sp += 1;
+                12
+            }
             Instruction::PUSH_AF => todo!(),
             Instruction::PUSH_R16 { r16 } => todo!(),
             Instruction::RES_U3_R8 { u3, r8 } => {
