@@ -384,12 +384,15 @@ impl Cpu {
             Instruction::NOP => 1,
             Instruction::OR_A_R8 { r8 } => {
                 self.or_a(self.registers.get_r8(&r8));
-                1
+                4
             }
-            Instruction::OR_A_HL => todo!(),
+            Instruction::OR_A_HL => {
+                self.or_a(memory.read(self.registers.get_hl()));
+                8
+            }
             Instruction::OR_A_N8 { n8 } => {
                 self.or_a(n8);
-                2
+                8
             }
             Instruction::POP_AF => {
                 self.registers.f = registers::Flags::from(memory.read(self.registers.sp));
