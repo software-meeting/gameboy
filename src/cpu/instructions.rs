@@ -50,7 +50,7 @@ pub(crate) enum Vec {
 }
 
 impl Vec {
-    fn get(&self) -> u8 {
+    pub(crate) fn get(&self) -> u16 {
         match self {
             Vec::X00 => 0x00,
             Vec::X08 => 0x08,
@@ -181,7 +181,7 @@ pub(crate) enum Instruction {
     SBC_A_R8 { r8: R8 },
     SBC_A_HL,
     SBC_A_N8 { n8: u8 },
-    SCF,
+    SCF {},
     SET_U3_R8 { u3: U3, r8: R8 },
     SET_U3_HL { u3: U3 },
     SLA_R8 { r8: R8 },

@@ -27,6 +27,12 @@ impl From<&Flags> for u8 {
     }
 }
 
+pub(crate) fn flags_to_u8(flags: &Flags) -> u8 {
+    return ((if flags.zero { 1 } else { 0 }) << 7)
+        | ((if flags.subtract { 1 } else { 0 }) << 6)
+        | ((if flags.half_carry { 1 } else { 0 }) << 5)
+        | ((if flags.carry { 1 } else { 0 }) << 4);
+}
 pub(crate) struct Registers {
     pub(crate) a: u8,
     pub(crate) b: u8,
@@ -68,6 +74,9 @@ impl Registers {
     fn set_af(&mut self, value: u16) {
         self.a = (value >> 8) as u8;
         self.f = Flags::from((value & 0xFF) as u8);
+    }
+    pub(crate) fn set_pc(&mut self, lower: u8, upper: u8) {
+        self.pc = ((upper << 4) | lower) as u16;
     }
 
     fn get_bc(&self) -> u16 {

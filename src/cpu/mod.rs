@@ -3,7 +3,7 @@ mod registers;
 
 use crate::memory::Memory;
 use instructions::{Instruction, R16, R8, U3};
-use registers::Registers;
+use registers::{Flags, Registers};
 
 #[derive(PartialEq)]
 enum ImeState {
@@ -15,6 +15,7 @@ pub(crate) struct Cpu {
     registers: Registers,
     ime_state: ImeState,
     low_power_mode: bool,
+    very_low_power_mode: bool,
 }
 
 impl Cpu {
@@ -23,6 +24,7 @@ impl Cpu {
             registers: Registers::new(),
             ime_state: ImeState::UNSET,
             low_power_mode: false,
+            very_low_power_mode: false,
         }
     }
 
@@ -88,8 +90,18 @@ impl Cpu {
                 self.bit(u3, byte);
                 12
             }
-            Instruction::CALL_N16 { n16 } => todo!(),
-            Instruction::CALL_CC_N16 { condition, n16 } => todo!(),
+            Instruction::CALL_N16 { n16 } => {
+                self.call(memory, n16);
+                24
+            }
+            Instruction::CALL_CC_N16 { condition, n16 } => {
+                let proceed = self.check_condition(condition);
+                if proceed {
+                    self.call(memory, n16);
+                    return 12;
+                }
+                24
+            }
             Instruction::CCF => {
                 self.registers.f.carry = !self.registers.f.carry;
                 4
@@ -383,6 +395,7 @@ impl Cpu {
                 self.registers.f = registers::Flags::from(memory.read(self.registers.sp));
                 self.registers.sp += 1;
                 self.registers.a = memory.read(self.registers.sp);
+                self.registers.sp += 1;
                 12
             }
             Instruction::POP_R16 { r16 } => {
@@ -396,8 +409,25 @@ impl Cpu {
                 self.registers.sp += 1;
                 12
             }
-            Instruction::PUSH_AF => todo!(),
-            Instruction::PUSH_R16 { r16 } => todo!(),
+            Instruction::PUSH_AF => {
+                self.registers.sp -= 1;
+                let value = self.registers.a;
+                self.load_u8_into_stack(memory, value);
+                self.registers.sp -= 1;
+                let value: u8 = registers::flags_to_u8(&self.registers.f);
+                self.load_u8_into_stack(memory, value);
+                16
+            }
+
+            Instruction::PUSH_R16 { r16 } => {
+                self.registers.sp -= 1;
+                let lower = self.registers.get_r8(&r16.get_lower());
+                let upper = self.registers.get_r8(&r16.get_upper());
+                self.load_u8_into_stack(memory, upper);
+                self.registers.sp -= 1;
+                self.load_u8_into_stack(memory, lower);
+                16
+            }
             Instruction::RES_U3_R8 { u3, r8 } => {
                 self.res_r8(instructions::U3::get(&u3), r8);
                 2
@@ -406,43 +436,297 @@ impl Cpu {
                 self.res_hl(memory, instructions::U3::get(&u3), self.registers.get_hl());
                 4
             }
-            Instruction::RET => todo!(),
-            Instruction::RET_CC { condition } => todo!(),
-            Instruction::RETI => todo!(),
-            Instruction::RL_R8 { r8 } => todo!(),
-            Instruction::RL_HL => todo!(),
-            Instruction::RLA => todo!(),
-            Instruction::RLC_R8 { r8 } => todo!(),
-            Instruction::RLC_HL => todo!(),
-            Instruction::RLCA => todo!(),
-            Instruction::RR_R8 { r8 } => todo!(),
-            Instruction::RR_HL => todo!(),
-            Instruction::RRA => todo!(),
-            Instruction::RRC_R8 { r8 } => todo!(),
-            Instruction::RRC_HL => todo!(),
-            Instruction::RRCA => todo!(),
-            Instruction::RST { vec } => todo!(),
-            Instruction::SBC_A_R8 { r8 } => todo!(),
-            Instruction::SBC_A_HL => todo!(),
-            Instruction::SBC_A_N8 { n8 } => todo!(),
-            Instruction::SCF => todo!(),
-            Instruction::SET_U3_R8 { u3, r8 } => todo!(),
-            Instruction::SET_U3_HL { u3 } => todo!(),
-            Instruction::SLA_R8 { r8 } => todo!(),
-            Instruction::SLA_HL => todo!(),
-            Instruction::SRA_R8 { r8 } => todo!(),
-            Instruction::SRA_HL => todo!(),
-            Instruction::SRL_R8 { r8 } => todo!(),
-            Instruction::SRL_HL => todo!(),
-            Instruction::STOP => todo!(),
-            Instruction::SUB_A_R8 { r8 } => todo!(),
-            Instruction::SUB_A_HL => todo!(),
-            Instruction::SUB_A_N8 { n8 } => todo!(),
-            Instruction::SWAP_R8 { r8 } => todo!(),
-            Instruction::SWAP_HL => todo!(),
-            Instruction::XOR_A_R8 { r8 } => todo!(),
-            Instruction::XOR_A_HL => todo!(),
-            Instruction::XOR_A_N8 { n8 } => todo!(),
+            Instruction::RET => {
+                self.ret(memory);
+                12
+            }
+            Instruction::RET_CC { condition } => {
+                let proceed = self.check_condition(condition);
+                if proceed {
+                    self.ret(memory);
+                    return 20;
+                }
+                8
+            }
+            Instruction::RETI => {
+                self.set_ime();
+                self.ret(memory);
+                16
+            }
+            Instruction::RL_R8 { r8 } => {
+                let value = self.rotate_left_through_carry(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::RL_HL => {
+                let value = self.rotate_left_through_carry(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                16
+            }
+            Instruction::RLA => {
+                self.registers.a = self.rotate_left_through_carry(self.registers.a);
+                self.registers.f.zero = false;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+
+                4
+            }
+            Instruction::RLC_R8 { r8 } => {
+                let value = self.rotate_left(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::RLC_HL => {
+                let value = self.rotate_left(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                16
+            }
+            Instruction::RLCA => {
+                let value = self.rotate_left(self.registers.a);
+                self.registers.a = value;
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                4
+            }
+            Instruction::RR_R8 { r8 } => {
+                let value = self.rotate_right_through_carry(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::RR_HL => {
+                let value = self.rotate_right_through_carry(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                16
+            }
+            Instruction::RRA => {
+                self.registers.a = self.rotate_right_through_carry(self.registers.a);
+                self.registers.f.zero = false;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+
+                4
+            }
+            Instruction::RRC_R8 { r8 } => {
+                let value = self.rotate_right(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::RRC_HL => {
+                let value = self.rotate_right(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), value);
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                16
+            }
+            Instruction::RRCA => {
+                let value = self.rotate_right(self.registers.a);
+                self.registers.a = value;
+                self.registers.f.zero = value == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                4
+            }
+            Instruction::RST { vec } => {
+                self.call(memory, vec.get());
+                16
+            }
+            Instruction::SBC_A_R8 { r8 } => {
+                let c: u8 = if self.registers.f.carry { 1 } else { 0 };
+                let subtrahend = self.registers.get_r8(&r8) + c;
+                let previous = self.registers.a;
+                self.registers.a -= subtrahend;
+                self.registers.f.carry = self.registers.a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (previous & 0xF) < (subtrahend & 0xF);
+                self.registers.f.carry = previous < subtrahend;
+                4
+            }
+            Instruction::SBC_A_HL => {
+                let previous = self.registers.a;
+                let c: u8 = if self.registers.f.carry { 1 } else { 0 };
+                let hl = memory.read(self.registers.get_hl());
+                let subtrahend = hl + c;
+                self.registers.a -= subtrahend;
+                self.registers.f.carry = self.registers.a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (previous & 0xF) < (subtrahend & 0xF);
+                self.registers.f.carry = previous < subtrahend;
+                8
+            }
+            Instruction::SBC_A_N8 { n8 } => {
+                let previous = self.registers.a;
+                let c: u8 = if self.registers.f.carry { 1 } else { 0 };
+                let subtrahend = n8 + c;
+                self.registers.a -= subtrahend;
+                self.registers.f.carry = self.registers.a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = (previous & 0xF) < (subtrahend & 0xF);
+                self.registers.f.carry = previous < subtrahend;
+                8
+            }
+            Instruction::SCF {} => {
+                self.registers.f.carry = true;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                4
+            }
+            Instruction::SET_U3_R8 { u3, r8 } => {
+                let mask = 1 << (u3.get() - 1);
+                self.registers
+                    .set_r8(&r8, self.registers.get_r8(&r8) | mask);
+                8
+            }
+            Instruction::SET_U3_HL { u3 } => {
+                let mask = 1 << (u3.get() - 1);
+                self.registers.set_hl(self.registers.get_hl() | mask);
+                8
+            }
+            Instruction::SLA_R8 { r8 } => {
+                let result = self.rotate_arithmetic_left(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::SLA_HL => {
+                let result = self.rotate_arithmetic_left(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                16
+            }
+            Instruction::SRA_R8 { r8 } => {
+                let result = self.rotate_arithmetic_right(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::SRA_HL => {
+                let result = self.rotate_arithmetic_right(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                16
+            }
+            Instruction::SRL_R8 { r8 } => {
+                let result = self.rotate_logical_right(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::SRL_HL => {
+                let result = self.rotate_logical_right(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                8
+            }
+            Instruction::STOP => {
+                self.very_low_power_mode = true;
+                4
+            }
+            Instruction::SUB_A_R8 { r8 } => {
+                let value = self.registers.get_r8(&r8);
+                let previous = self.registers.a;
+                self.registers.a -= value;
+                self.registers.f.zero = self.registers.a == 0;
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry = (value & 0x10) > (previous & 0x10);
+                self.registers.f.carry = value > previous;
+                4
+            }
+            Instruction::SUB_A_HL => {
+                let value = memory.read(self.registers.get_hl());
+                let previous = self.registers.a;
+                self.registers.a -= value;
+                self.registers.f.zero = self.registers.a == 0;
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry = (value & 0x10) > (previous & 0x10);
+                self.registers.f.carry = value > previous;
+                4
+            }
+            Instruction::SUB_A_N8 { n8 } => {
+                let previous = self.registers.a;
+                self.registers.a -= n8;
+                self.registers.f.zero = self.registers.a == 0;
+                self.registers.f.subtract = true;
+                self.registers.f.half_carry = (n8 & 0x10) > (previous & 0x10);
+                self.registers.f.carry = n8 > previous;
+                4
+            }
+            Instruction::SWAP_R8 { r8 } => {
+                let result = self.swap(self.registers.get_r8(&r8));
+                self.registers.set_r8(&r8, result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = false;
+                8
+            }
+            Instruction::SWAP_HL => {
+                let result = self.swap(memory.read(self.registers.get_hl()));
+                memory.write(self.registers.get_hl(), result);
+                self.registers.f.zero = result == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = false;
+                16
+            }
+            Instruction::XOR_A_R8 { r8 } => {
+                self.registers.a = self.registers.a ^ self.registers.get_r8(&r8);
+                self.registers.f.zero = self.registers.a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = false;
+                4
+            }
+            Instruction::XOR_A_HL => {
+                self.registers.a = self.registers.a ^ memory.read(self.registers.get_hl());
+                self.registers.f.zero = self.registers.a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = false;
+                8
+            }
+            Instruction::XOR_A_N8 { n8 } => {
+                self.registers.a = self.registers.a ^ n8;
+                self.registers.f.zero = self.registers.a == 0;
+                self.registers.f.subtract = false;
+                self.registers.f.half_carry = false;
+                self.registers.f.carry = false;
+                8
+            }
         };
         if self.ime_state == ImeState::PENDING {
             self.ime_state = ImeState::SET;
@@ -539,7 +823,7 @@ impl Cpu {
         // Check if carry was required for the full operation
         self.registers.f.carry = subtrahend > self.registers.a;
     }
-    fn dec_r16(&mut self, r16: R16) {
+    fn set_dec_r16(&mut self, r16: R16) {
         let r16_val = self.registers.get_r16(&r16);
         let r16_val_dec = r16_val - 1;
         self.registers.set_r16(&r16, r16_val_dec);
@@ -547,6 +831,89 @@ impl Cpu {
         self.registers.f.subtract = true;
         // Carry from 4th bit required if it flipped
         self.registers.f.half_carry = r16_val_dec & 0x8 != r16_val & 0x8;
+    }
+    // todo: rewrite LD instructions to use helper functions
+    fn load_u8_into_R8(&mut self, value: u8, register: R8) {
+        self.registers.set_r8(&register, value);
+    }
+    fn load_u8_into_stack(&mut self, memory: &mut Memory, value: u8) {
+        let address = self.registers.sp;
+        memory.write(address, value);
+    }
+    fn load_address_into_reg(&mut self, memory: &mut Memory, address: u16, register: R8) {
+        let value = memory.read(address);
+        self.registers.set_r8(&register, value);
+    }
+    fn call(&mut self, memory: &mut Memory, n16: u16) {
+        // push program counter to stack
+        self.registers.sp -= 1;
+        let lower: u8 = (self.registers.pc & 0xF) as u8;
+        let upper: u8 = (self.registers.pc >> 4) as u8;
+        self.load_u8_into_stack(memory, lower);
+        self.registers.sp -= 1;
+        self.load_u8_into_stack(memory, upper);
+        self.registers.pc = n16;
+    }
+    fn ret(&mut self, memory: &mut Memory) {
+        let lower: u8 = memory.read(self.registers.pc);
+        self.registers.pc += 1;
+        let upper: u8 = memory.read(self.registers.pc);
+        self.registers.pc += 1;
+        self.registers.set_pc(lower, upper);
+    }
+    fn set_ime(&mut self) {
+        if self.ime_state != ImeState::PENDING {
+            self.ime_state = ImeState::PENDING;
+        }
+    }
+    fn rotate_arithmetic_left(&mut self, value: u8) -> u8 {
+        let b7: bool = value & 0x80 == 0;
+        self.registers.f.carry = b7;
+        return value << 1;
+    }
+    fn rotate_arithmetic_right(&mut self, value: u8) -> u8 {
+        let b7: u8 = value & 0x80;
+        self.registers.f.carry = value & 1 == 0;
+        return (value >> 1) | b7;
+    }
+    fn rotate_logical_right(&mut self, value: u8) -> u8 {
+        let b7: u8 = value & 0x80;
+        self.registers.f.carry = value & 1 == 0;
+        return (value >> 1) | b7;
+    }
+    fn rotate_left_through_carry(&mut self, value: u8) -> u8 {
+        self.registers.f.carry = value & 0x80 == 0;
+        let mut rot: u8 = value << 1;
+        if self.registers.f.carry {
+            rot = rot | 1;
+        }
+        rot
+    }
+    fn rotate_left(&mut self, value: u8) -> u8 {
+        let b7: bool = value & 0x80 == 0;
+        self.registers.f.carry = b7;
+        let mut rot: u8 = value << 1;
+        if b7 {
+            rot = rot | 1;
+        }
+        rot
+    }
+    fn rotate_right_through_carry(&mut self, value: u8) -> u8 {
+        self.registers.f.carry = value & 1 == 0;
+        let mut rot: u8 = value >> 1;
+        if self.registers.f.carry {
+            rot = rot | 0x80;
+        }
+        rot
+    }
+    fn rotate_right(&mut self, value: u8) -> u8 {
+        let b0: bool = value & 1 == 0;
+        self.registers.f.carry = b0;
+        let mut rot: u8 = value >> 1;
+        if b0 {
+            rot = rot | 0x80;
+        }
+        rot
     }
     fn or_a(&mut self, rhs: u8) {
         self.registers.a = self.registers.a | rhs;
@@ -574,5 +941,10 @@ impl Cpu {
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false;
         self.registers.f.carry = false;
+    }
+    fn swap(&mut self, value: u8) -> u8 {
+        let upper = (value >> 4) & 0xF;
+        let lower = value & 0xF;
+        return (lower << 4) | upper;
     }
 }
