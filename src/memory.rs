@@ -1,4 +1,4 @@
-use crate::io::Joypad;
+use crate::io::{Joypad, Timers};
 
 const ROM_BANK_0_START: u16 = 0x0000;
 const ROM_BANK_0_END: u16 = 0x3FFF;
@@ -47,6 +47,7 @@ pub struct Memory {
     high_ram: [u8; HIGH_RAM_SIZE],
 
     joypad: Joypad,
+    timers: Timers,
 }
 
 impl Memory {
@@ -59,6 +60,7 @@ impl Memory {
             oam: [0; OAM_SIZE],
             high_ram: [0; HIGH_RAM_SIZE],
             joypad: Joypad::new(),
+            timers: Timers::new(),
         }
     }
 
@@ -73,17 +75,9 @@ impl Memory {
             ECHO_RAM_START..=ECHO_RAM_END => self.work_ram[(address - ECHO_RAM_START) as usize],
             OAM_START..=OAM_END => self.oam[(address - OAM_START) as usize],
             UNUSABLE_START..=UNUSABLE_END => 0x00, // TODO
-            IO_START..=IO_END => todo!(),
+            IO_START..=IO_END => self.read_io(address),
             HIGH_RAM_START..=HIGH_RAM_END => self.high_ram[(address - HIGH_RAM_START) as usize],
             INTERRUPT_ENABLE => todo!(),
-        }
-    }
-
-    fn read_id(&self, address: u16) -> u8 {
-        match address {
-            0xFF00 => self.joypad.get(),
-            0xFF01 => 0x0,
-            0xFF02 => 0x0,
         }
     }
 
@@ -104,11 +98,31 @@ impl Memory {
             }
             OAM_START..=OAM_END => self.oam[(address - OAM_START) as usize] = byte,
             UNUSABLE_START..=UNUSABLE_END => {} // TODO
-            IO_START..=IO_END => todo!(),
+            IO_START..=IO_END => self.write_io(address, byte),
             HIGH_RAM_START..=HIGH_RAM_END => {
                 self.high_ram[(address - HIGH_RAM_START) as usize] = byte
             }
             INTERRUPT_ENABLE => todo!(),
+        };
+    }
+
+    fn read_io(&self, address: u16) -> u8 {
+        match address {
+            0xFF00 => self.joypad.get(),
+            0xFF01 => todo!(),
+            0xFF02 => todo!(),
+            0xFF03 => unimplemented!(),
+            0xFF04 => self.timers.get_divider(),
+        }
+    }
+
+    fn write_io(&self, address: u16, byte: u8) {
+        match address {
+            0xFF00 => self.joypad.set(byte),
+            0xFF01 => todo!(),
+            0xFF02 => todo!(),
+            0xFF03 => unimplemented!(),
+            0xFF04 => {}
         };
     }
 }
