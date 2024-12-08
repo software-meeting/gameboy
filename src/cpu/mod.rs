@@ -24,12 +24,16 @@ impl Cpu {
         Self {
             registers: Registers::new(),
             ime_state: ImeState::UNSET,
-            low_power_mode: false,
-            very_low_power_mode: false,
+            low_power_mode: false,      // HALT
+            very_low_power_mode: false, // STOP
         }
     }
 
     fn execute(&mut self, i: Instruction, memory: &mut Memory) -> u8 {
+        // Update IME (if we are halfway thru di or ei instruction)
+        // Check IME || if halted
+        //
+
         let t_cycle = match i {
             /*
              * Add the value in r8 plus the carry flag to A.
@@ -1069,10 +1073,6 @@ impl Cpu {
             self.ime_state = ImeState::SET;
         } else if self.ime_state == ImeState::PENDING_NEW_INSTRUCTION {
             // EI is called but we must wait another instruction to be called (and also executed).
-
-            // TODO: Logically, this should be at the top of the execute function.
-            // However, this may make the state machine hard to reason about.
-            // Find the right approach.
             self.ime_state = ImeState::PENDING_INSTRUCTION_COMPLETION;
         }
         t_cycle

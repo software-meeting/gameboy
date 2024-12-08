@@ -48,6 +48,8 @@ pub struct Memory {
 
     joypad: Joypad,
     timers: Timers,
+    interrupt_flag: u8,
+    interrupt_enable: u8,
 }
 
 impl Memory {
@@ -61,6 +63,8 @@ impl Memory {
             high_ram: [0; HIGH_RAM_SIZE],
             joypad: Joypad::new(),
             timers: Timers::new(),
+            interrupt_flag: 0,
+            interrupt_enable: 0,
         }
     }
 
@@ -77,7 +81,7 @@ impl Memory {
             UNUSABLE_START..=UNUSABLE_END => 0x00, // TODO
             IO_START..=IO_END => self.read_io(address),
             HIGH_RAM_START..=HIGH_RAM_END => self.high_ram[(address - HIGH_RAM_START) as usize],
-            INTERRUPT_ENABLE => todo!(),
+            INTERRUPT_ENABLE => self.interrupt_enable,
         }
     }
 
@@ -102,27 +106,35 @@ impl Memory {
             HIGH_RAM_START..=HIGH_RAM_END => {
                 self.high_ram[(address - HIGH_RAM_START) as usize] = byte
             }
-            INTERRUPT_ENABLE => todo!(),
+            INTERRUPT_ENABLE => self.interrupt_enable = byte,
         };
     }
 
     fn read_io(&self, address: u16) -> u8 {
         match address {
+            0x0000..0xFF00 | 0xFF80..=0xFFFF => unreachable!(),
             0xFF00 => self.joypad.get(),
             0xFF01 => todo!(),
             0xFF02 => todo!(),
             0xFF03 => unimplemented!(),
             0xFF04 => self.timers.get_divider(),
+            0xFF0F => self.interrupt_flag,
+            0xFF10..=0xFF3F => todo!(), // Sound
+            0xFF4F..=0xFF77 => 0x0,     // CGB only
         }
     }
 
     fn write_io(&self, address: u16, byte: u8) {
         match address {
+            0x0000..0xFF00 | 0xFF80..=0xFFFF => unreachable!(),
             0xFF00 => self.joypad.set(byte),
             0xFF01 => todo!(),
             0xFF02 => todo!(),
             0xFF03 => unimplemented!(),
             0xFF04 => {}
+            0xFF0F => self.interrupt_flag = byte,
+            0xFF10..=0xFF3F => todo!(), // Sound
+            0xFF4F..=0xFF77 => {}       // CGB only
         };
     }
 }
