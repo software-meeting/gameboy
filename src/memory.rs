@@ -1,51 +1,114 @@
-const ROM_BANK_0_START: usize = 0x0000;
-const ROM_BANK_0_END: usize = 0x3FFF;
+use crate::io::Joypad;
 
-const ROM_BANK_N_START: usize = 0x4000;
-const ROM_BANK_N_END: usize = 0x7FFF;
+const ROM_BANK_0_START: u16 = 0x0000;
+const ROM_BANK_0_END: u16 = 0x3FFF;
 
-const VIDEO_RAM_START: usize = 0x8000;
-const VIDEO_RAM_END: usize = 0x9FFF;
+const ROM_BANK_N_START: u16 = 0x4000;
+const ROM_BANK_N_END: u16 = 0x7FFF;
 
-const EXTERNAL_RAM_START: usize = 0xA000;
-const EXTERNAL_RAM_END: usize = 0xBFFF;
+const VIDEO_RAM_START: u16 = 0x8000;
+const VIDEO_RAM_END: u16 = 0x9FFF;
 
-const WORK_RAM_START: usize = 0xC000;
-const WORK_RAM_END: usize = 0xDFFF;
+const EXTERNAL_RAM_START: u16 = 0xA000;
+const EXTERNAL_RAM_END: u16 = 0xBFFF;
 
-const ECHO_RAM_START: usize = 0xE000;
-const ECHO_RAM_END: usize = 0xFDFF;
+const WORK_RAM_START: u16 = 0xC000;
+const WORK_RAM_END: u16 = 0xDFFF;
 
-const OAM_START: usize = 0xFE00;
-const OAM_END: usize = 0xFE00;
+const ECHO_RAM_START: u16 = 0xE000;
+const ECHO_RAM_END: u16 = 0xFDFF;
 
-const UNUSABLE_START: usize = 0xFEA0;
-const UNUSABLE_END: usize = 0xFEFF;
+const OAM_START: u16 = 0xFE00;
+const OAM_END: u16 = 0xFE9F;
 
-const IO_START: usize = 0xFF00;
-const IO_END: usize = 0xFF7F;
+const UNUSABLE_START: u16 = 0xFEA0;
+const UNUSABLE_END: u16 = 0xFEFF;
 
-const HIGH_RAM_START: usize = 0xFF80;
-const HIGH_RAM_END: usize = 0xFFFE;
+const IO_START: u16 = 0xFF00;
+const IO_END: u16 = 0xFF7F;
 
-const INTERUPT_ENABLE: usize = 0xFFFF;
+const HIGH_RAM_START: u16 = 0xFF80;
+const HIGH_RAM_END: u16 = 0xFFFE;
+
+const INTERRUPT_ENABLE: u16 = 0xFFFF;
+
+const VIDEO_RAM_SIZE: usize = (VIDEO_RAM_END - VIDEO_RAM_START + 1) as usize;
+const EXTERNAL_RAM_SIZE: usize = (EXTERNAL_RAM_END - EXTERNAL_RAM_START + 1) as usize;
+const WORK_RAM_SIZE: usize = (WORK_RAM_END - WORK_RAM_START + 1) as usize;
+const OAM_SIZE: usize = (OAM_END - OAM_START + 1) as usize;
+const HIGH_RAM_SIZE: usize = (HIGH_RAM_END - HIGH_RAM_START + 1) as usize;
 
 pub struct Memory {
-    data: [u8; INTERUPT_ENABLE],
+    rom: Vec<u8>,
+    video_ram: [u8; VIDEO_RAM_SIZE],
+    ext_ram: [u8; EXTERNAL_RAM_SIZE],
+    work_ram: [u8; WORK_RAM_SIZE],
+    oam: [u8; OAM_SIZE],
+    high_ram: [u8; HIGH_RAM_SIZE],
+
+    joypad: Joypad,
 }
 
 impl Memory {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(rom: Vec<u8>) -> Self {
         Self {
-            data: [0; INTERUPT_ENABLE],
+            rom,
+            video_ram: [0; VIDEO_RAM_SIZE],
+            ext_ram: [0; EXTERNAL_RAM_SIZE],
+            work_ram: [0; WORK_RAM_SIZE],
+            oam: [0; OAM_SIZE],
+            high_ram: [0; HIGH_RAM_SIZE],
+            joypad: Joypad::new(),
         }
     }
 
     pub(crate) fn read(&self, address: u16) -> u8 {
-        self.data[address as usize]
+        match address {
+            ROM_BANK_0_START..=ROM_BANK_N_END => self.rom[address as usize],
+            VIDEO_RAM_START..=VIDEO_RAM_END => self.video_ram[(address - VIDEO_RAM_START) as usize],
+            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
+                self.ext_ram[(address - EXTERNAL_RAM_START) as usize]
+            }
+            WORK_RAM_START..=WORK_RAM_END => self.work_ram[(address - WORK_RAM_START) as usize],
+            ECHO_RAM_START..=ECHO_RAM_END => self.work_ram[(address - ECHO_RAM_START) as usize],
+            OAM_START..=OAM_END => self.oam[(address - OAM_START) as usize],
+            UNUSABLE_START..=UNUSABLE_END => 0x00, // TODO
+            IO_START..=IO_END => todo!(),
+            HIGH_RAM_START..=HIGH_RAM_END => self.high_ram[(address - HIGH_RAM_START) as usize],
+            INTERRUPT_ENABLE => todo!(),
+        }
+    }
+
+    fn read_id(&self, address: u16) -> u8 {
+        match address {
+            0xFF00 => self.joypad.get(),
+            0xFF01 => 0x0,
+            0xFF02 => 0x0,
+        }
     }
 
     pub(crate) fn write(&mut self, address: u16, byte: u8) {
-        self.data[address as usize] = byte;
+        match address {
+            ROM_BANK_0_START..=ROM_BANK_N_END => self.rom[address as usize] = byte,
+            VIDEO_RAM_START..=VIDEO_RAM_END => {
+                self.video_ram[(address - VIDEO_RAM_START) as usize] = byte
+            }
+            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
+                self.ext_ram[(address - EXTERNAL_RAM_START) as usize] = byte
+            }
+            WORK_RAM_START..=WORK_RAM_END => {
+                self.work_ram[(address - WORK_RAM_START) as usize] = byte
+            }
+            ECHO_RAM_START..=ECHO_RAM_END => {
+                self.work_ram[(address - ECHO_RAM_START) as usize] = byte
+            }
+            OAM_START..=OAM_END => self.oam[(address - OAM_START) as usize] = byte,
+            UNUSABLE_START..=UNUSABLE_END => {} // TODO
+            IO_START..=IO_END => todo!(),
+            HIGH_RAM_START..=HIGH_RAM_END => {
+                self.high_ram[(address - HIGH_RAM_START) as usize] = byte
+            }
+            INTERRUPT_ENABLE => todo!(),
+        };
     }
 }
