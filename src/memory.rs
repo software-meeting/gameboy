@@ -118,6 +118,10 @@ impl Memory {
             0xFF02 => todo!(),
             0xFF03 => unimplemented!(),
             0xFF04 => self.timers.get_divider(),
+            0xFF05 => self.timers.get_counter(),
+            0xFF06 => self.timers.get_tma(),
+            0xFF07 => self.timers.get_tac(),
+            0xFF08..=0xFF0E => unimplemented!(),
             0xFF0F => self.interrupt_flag,
             0xFF10..=0xFF3F => todo!(), // Sound
             0xFF4F..=0xFF77 => 0x0,     // CGB only
@@ -131,7 +135,11 @@ impl Memory {
             0xFF01 => todo!(),
             0xFF02 => todo!(),
             0xFF03 => unimplemented!(),
-            0xFF04 => {}
+            0xFF04 => self.timers.reset_div(),
+            0xFF05 => self.timers.set_counter(byte),
+            0xFF06 => self.timers.set_tma(byte),
+            0xFF07 => self.timers.set_tac(byte),
+            0xFF08..=0xFF0E => unimplemented!(),
             0xFF0F => self.interrupt_flag = byte,
             0xFF10..=0xFF3F => todo!(), // Sound
             0xFF4F..=0xFF77 => {}       // CGB only
