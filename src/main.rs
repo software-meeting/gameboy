@@ -2,6 +2,7 @@ use cpu::Cpu;
 use memory::Memory;
 use minifb::{Scale, Window, WindowOptions};
 
+mod cartridge;
 mod cpu;
 mod io;
 mod memory;
